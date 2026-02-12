@@ -1,0 +1,276 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baby Mirror</title>
+    <style>
+        * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    background-color: transparent;
+}
+
+.canvas-container {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+canvas, video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+video {
+    transform: scaleX(-1);  /* Mirror the video */
+}
+    </style>
+</head>
+<body>
+    <div class="canvas-container">
+        <video id="video" autoplay playsinline style="display:none"></video>
+        <canvas id="canvas"></canvas>
+    </div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+    <script>
+        const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const eyeScale = 1.9;
+const cheekAmount = 80;
+const lipScale = 1.4;
+const headVerticalShrink = 0.15;
+
+let faceMesh;
+let animationId;
+
+console.log('Initializing camera...');
+init();
+
+async function init() {
+    try {
+        console.log('Requesting camera access...');
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 }
+        });
+
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        };
+        
+        console.log('Loading Face Mesh AI model...');
+
+        // LOAD FACE MESH (468 precise facial points!)
+        faceMesh = await faceLandmarksDetection.createDetector(
+            faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+            {
+                runtime: 'mediapipe',
+                solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
+                refineLandmarks: true  // Extra precision for eyes/lips
+            }
+        );
+
+        console.log('Transformation active!');
+        processFrame();
+
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+async function processFrame() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // Detect faces with 468 keypoints each
+        const faces = await faceMesh.estimateFaces(video, { flipHorizontal: false });
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        tempCtx.save();
+        tempCtx.scale(-1, 1);
+        tempCtx.translate(-canvas.width, 0);
+        tempCtx.drawImage(video, 0, 0);
+        tempCtx.restore();
+
+        if (faces.length > 0) {
+            const face = faces[0];
+            applyDistortion(tempCanvas, face);
+        } else {
+            ctx.drawImage(tempCanvas, 0, 0);
+        }
+    }
+
+    animationId = requestAnimationFrame(processFrame);
+}
+
+function applyDistortion(sourceCanvas, face) {
+    const kp = face.keypoints;
+    
+    // PRECISE FACE MESH POINTS:
+    // Eyes: 33 (left outer), 133 (left inner), 362 (right inner), 263 (right outer)
+    // Lips: 61 (top), 291 (bottom), 78 (left), 308 (right)
+    // Nose: 1 (tip)
+    // Face oval: 10 (top), 152 (chin)
+    
+    const noseTip = kp[1];  // Nose tip
+    const leftEyeOuter = kp[33];
+    const leftEyeInner = kp[133];
+    const rightEyeInner = kp[362];
+    const rightEyeOuter = kp[263];
+    const upperLip = kp[13];  // Center upper lip
+    const lowerLip = kp[14];  // Center lower lip
+    const lipLeft = kp[78];
+    const lipRight = kp[308];
+    const forehead = kp[10];
+    const chin = kp[152];
+    
+    // Calculate face center
+    const headCenterX = canvas.width - noseTip.x;
+    const headCenterY = noseTip.y;
+    
+    // Calculate head size
+    const faceHeight = Math.abs(forehead.y - chin.y);
+    const headRadius = faceHeight * 0.5;
+    
+    const imageData = ctx.createImageData(canvas.width, canvas.height);
+    const srcCtx = sourceCanvas.getContext('2d');
+    const srcData = srcCtx.getImageData(0, 0, canvas.width, canvas.height);
+
+    for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+            let srcX = x;
+            let srcY = y;
+
+            const dx = x - headCenterX;
+            const dy = y - headCenterY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // HEAD VERTICAL SHRINK
+            if (dist < headRadius * 1.5) {
+                const headInfluence = Math.max(0, 1 - dist / (headRadius * 1.5));
+                const verticalShrink = 1 - (headVerticalShrink * headInfluence);
+                const verticalOffset = dy * (1 - verticalShrink);
+                srcY += verticalOffset;
+            }
+
+            // LEFT EYE ENLARGEMENT (precise center between outer and inner corner)
+            const leftEyeCenterX = canvas.width - (leftEyeOuter.x + leftEyeInner.x) / 2;
+            const leftEyeCenterY = (leftEyeOuter.y + leftEyeInner.y) / 2;
+            const leftEyeDx = x - leftEyeCenterX;
+            const leftEyeDy = y - leftEyeCenterY;
+            const leftEyeDist = Math.sqrt(leftEyeDx * leftEyeDx + leftEyeDy * leftEyeDy);
+
+            if (leftEyeDist < 50) {
+                const eyeInfluence = Math.max(0, 1 - leftEyeDist / 50);
+                const smoothInfluence = eyeInfluence * eyeInfluence;
+                const eyeExpansion = 1 + (eyeScale - 1) * smoothInfluence * 0.5;
+                srcX = leftEyeCenterX + leftEyeDx / eyeExpansion;
+                srcY = leftEyeCenterY + leftEyeDy / eyeExpansion;
+            }
+
+            // RIGHT EYE ENLARGEMENT
+            const rightEyeCenterX = canvas.width - (rightEyeOuter.x + rightEyeInner.x) / 2;
+            const rightEyeCenterY = (rightEyeOuter.y + rightEyeInner.y) / 2;
+            const rightEyeDx = x - rightEyeCenterX;
+            const rightEyeDy = y - rightEyeCenterY;
+            const rightEyeDist = Math.sqrt(rightEyeDx * rightEyeDx + rightEyeDy * rightEyeDy);
+
+            if (rightEyeDist < 50) {
+                const eyeInfluence = Math.max(0, 1 - rightEyeDist / 50);
+                const smoothInfluence = eyeInfluence * eyeInfluence;
+                const eyeExpansion = 1 + (eyeScale - 1) * smoothInfluence * 0.5;
+                srcX = rightEyeCenterX + rightEyeDx / eyeExpansion;
+                srcY = rightEyeCenterY + rightEyeDy / eyeExpansion;
+            }
+
+            // LIP ENLARGEMENT (center between upper and lower lip)
+            const lipCenterX = canvas.width - (upperLip.x + lowerLip.x) / 2;
+            const lipCenterY = (upperLip.y + lowerLip.y) / 2;
+            const lipDx = x - lipCenterX;
+            const lipDy = y - lipCenterY;
+            const lipDist = Math.sqrt(lipDx * lipDx + lipDy * lipDy);
+
+            if (lipDist < 40) {
+                const lipInfluence = Math.max(0, 1 - lipDist / 40);
+                const smoothInfluence = lipInfluence * lipInfluence;
+                const lipExpansion = 1 + (lipScale - 1) * smoothInfluence;
+                srcX = lipCenterX + lipDx / lipExpansion;
+                srcY = lipCenterY + lipDy / lipExpansion;
+            }
+
+            // CHEEK PUFF (using precise face mesh geometry)
+            const cheekLeftX = headCenterX - headRadius * 0.4;
+            const cheekRightX = headCenterX + headRadius * 0.4;
+            const cheekY = headCenterY + headRadius * 0.2;
+
+            const leftCheekDx = x - cheekLeftX;
+            const leftCheekDy = y - cheekY;
+            const leftCheekDist = Math.sqrt(leftCheekDx * leftCheekDx + leftCheekDy * leftCheekDy);
+
+            if (leftCheekDist < 50) {
+                const cheekInfluence = Math.max(0, 1 - leftCheekDist / 50);
+                const cheekPush = (cheekAmount / 100) * cheekInfluence * 0.3;
+                srcX += leftCheekDx * cheekPush;
+                srcY += leftCheekDy * cheekPush;
+            }
+
+            const rightCheekDx = x - cheekRightX;
+            const rightCheekDy = y - cheekY;
+            const rightCheekDist = Math.sqrt(rightCheekDx * rightCheekDx + rightCheekDy * rightCheekDy);
+
+            if (rightCheekDist < 50) {
+                const cheekInfluence = Math.max(0, 1 - rightCheekDist / 50);
+                const cheekPush = (cheekAmount / 100) * cheekInfluence * 0.3;
+                srcX += rightCheekDx * cheekPush;
+                srcY += rightCheekDy * cheekPush;
+            }
+
+            // PIXEL COPYING
+            srcX = Math.max(0, Math.min(canvas.width - 1, Math.floor(srcX)));
+            srcY = Math.max(0, Math.min(canvas.height - 1, Math.floor(srcY)));
+
+            const srcIdx = (srcY * canvas.width + srcX) * 4;
+            const dstIdx = (y * canvas.width + x) * 4;
+
+            imageData.data[dstIdx] = srcData.data[srcIdx];
+            imageData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
+            imageData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
+            imageData.data[dstIdx + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+}
+    </script>
+</body>
+</html>
+
+ -->

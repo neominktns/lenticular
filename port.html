@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>lenticular (working title) - port</title>
+    <link rel="stylesheet" href="port-style.css">
+</head>
+<body>
+    <div class="canvas-container">
+        <video id="video" autoplay playsinline style="display:none"></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+<!--script-->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    
+    <script src="port.js"></script>
+</body>
+</html>

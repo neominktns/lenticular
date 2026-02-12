@@ -4,7 +4,7 @@ const ctx = canvas.getContext(`2d`);
 const statusMessage = document.getElementById(`status`);
 
 const eyeScale = 1.6;
-const cheekAmount = 0.8;
+const cheekAmount = 1;
 
 let poseDetector;
 let animationId;
@@ -146,9 +146,9 @@ function applyDistortion(sourceCanvas, pose) {
                 const eyeDy = y-leftEyeY;
                 const eyeDist = Math.sqrt(eyeDx*eyeDx+eyeDy*eyeDy);
 
-                if(eyeDist < 40) {
+                if(eyeDist < 70) {
                     const eyeInfluence = Math.max(0,1-eyeDist/40);
-                    const smoothInfluence = eyeInfluence * eyeInfluence;
+                    const smoothInfluence = eyeInfluence * eyeInfluence * eyeInfluence;
                     const eyeExpansion = 1+(eyeScale-1)*smoothInfluence*0.5;
                     srcX = leftEyeX + eyeDx / eyeExpansion;
                     srcY = leftEyeY + eyeDy / eyeExpansion;
@@ -165,7 +165,7 @@ function applyDistortion(sourceCanvas, pose) {
                 const eyeDy = y-rightEyeY;
                 const eyeDist = Math.sqrt(eyeDx*eyeDx+eyeDy*eyeDy);
 
-                if(eyeDist < 60) {
+                if(eyeDist < 70) {
                     const eyeInfluence = Math.max(0,1-eyeDist/40);
                     const smoothInfluence = eyeInfluence * eyeInfluence * eyeInfluence;
                     const eyeExpansion = 1+(eyeScale-1)*smoothInfluence*0.5;

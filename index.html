@@ -7,9 +7,28 @@
     <link rel="stylesheet" href="port-style.css">
 </head>
 <body>
+    <div>
+        <img src="assets/lenticular.png" id="lenticular">
+    </div>
     <div class="canvas-container">
-        <video id="video" autoplay playsinline style="display:none"></video>
-        <canvas id="canvas"></canvas>
+        <div id="video-container">
+            <video id="video" autoplay playsinline style="display:none"></video>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+    <div id="bottom-bar-container">
+        <img id="bottom-bar" src="assets/bottom-bar.png">
+        <p id="instruction">&#8604; &nbsp;&nbsp;&nbsp; move cursor across screen to see both versions! &nbsp;&nbsp;&nbsp; &#8605;</p>
+
+    </div>
+    <div class="uploader-container">
+        <div class="uploader">
+            <form action="/upload-endpoint" method="post" enctype="multipart/form-data">
+    <label for="fileUpload">Select a file:</label>
+    <input type="file" id="fileUpload" name="filename">
+    <input type="submit" value="Upload File">
+</form>
+        </div>
     </div>
 
 <!--script-->
